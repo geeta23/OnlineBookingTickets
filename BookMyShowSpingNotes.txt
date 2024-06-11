@@ -1,0 +1,252 @@
+To add dependency in jpa,
+maven spring <name of dependency>
+copy that dependency an paste in pom.xml
+and ctrl+shift+A and reload all maven dependencies or build --> rebuild project or pom.xml --> right click reload project
+
+
+
+1) go to start.spring.io and select all the dependencies needed and create a project.
+ -- jpa - java persistent api, a ORM(obeject relational mapping) framework, which will map objects to tables
+ -- spring web -- tomcat server
+ -- lombok -- getter and setter
+ -- postgres - update all the info in application.properties
+2) open that project in IntelliJ
+3) main is inside java folder
+4) write all the classes in java folder
+
+for spring.jpa.hibernate.ddl-auto=update/create/verify
+
+create - everytime we start the application tables will drop and will create again, loss of data, never use in production
+update - everytime we start the application only updated changes are reflected. No table drop, hence no loss of data.
+verify - if tables are not created by jpa but created by a third party or my myself, verifies if tables and structure matches the models or not.
+no creating no updating just verify the structure.
+
+3rd party application - liquibase/flyway -- we write script for SQL and we execute them using this app
+then we use verify as option
+
+// log the sql queries that we execute
+spring.jpa.properties.hibernate.show-sql=true
+spring.jpa.show-sql=true
+
+how do jpa work?
+jpa goes to all classes that are marked as entity and check if table already exists for that table,
+if not will create by running queries.
+
+-> user is the key word in postgres so can't give it as a table name. so use @Entity(name = "User_Table")
+even though the class name is "user"
+
+-> since we gave id is auto generate, it is incrementing by 50, we can customise it.
+-> sequence is the function to auto generate the value for the id i.e primary key
+
+two way dependency and one way dependency
+=========================================
+one way dependency
+------------------
+-> eager loading -  loads all the internal data before loading the parent data.
+eg- city (id, name, list<Theater>). relation between city and theater is one to many
+so in eager loading first theater is loaded and then city. impacts the performance as
+it will load all the internal classes.
+-> lazy loading - queries the data as in when required.
+when we call city object id and name are loaded but theater is loaded as in when asked for.
+lazy loading is always preferred than eager loading
+
+both lazy and eager loading are in run time
+
+example for one way binding
+1) option 1:
+city
+----
+id;
+name;
+@oneToMany
+list<Theater>;
+
+Theater
+-------
+
+id;
+name;
+list<Audi>;
+
+
+2) option 2
+city
+----
+id;
+name;
+@oneToMany
+list<Theater>;
+
+Theater
+-------
+
+id;
+name;
+list<Audi>;
+@ManyToOne
+city;
+
+completely depends on use case whether to use unidirectional or bidirectional.
+if they are two class A and B, if user is first coming to A and then going to B then
+put the relation in A side else put the relation on B side. if the user searches from both sides
+i.e. from A and also B, then we put the relation at both ends as option 2 else use option 1.
+
+unidirectional
+one to one mapping(@OneToOne)
+user
+----
+id;
+@OneToOne
+userprofile;
+
+userprofile
+----
+id;
+name;
+
+in db we will have userProfile_id stored in user table.
+
+user
+----
+id;
+
+userprofile
+----
+id;
+name;
+@OneToOne
+user
+
+in db we will have user_id stored in userProfile table.
+
+one to one bidirectional,
+========================
+driver
+-----
+..
+@OneToOne(mappedBy = "driver") // then driver fk will go to other class, driver is name of
+// Driver in License class
+License license;
+
+// I want to join driver with license with driver_id as fk in license table
+License
+-------
+...
+@OneToOne
+Driver driver;
+
+A ----> B
+mappedBy(A) then A fk is stored in B entity table
+
+in unidirectional it is obvious, but in two way we have to use mappedBy,
+as we can't have foreign key on both sides
+
+one to many unidirectional
+===========================
+school and classRoom(1 to many)
+school{
+int id; // idfield is what ever variable is here
+@OneToMany
+@JoinColumn(name = "school_id")
+list<ClassRoom>classRoom
+}
+ClassRoom{
+// regular
+}
+
+- if we just give @OneToMany, a mapping table will be generated as we didn't mention where should fk
+should go.
+- mention JoinColumn(name = "school_id") want to join school with classroom as school_id as fk in
+classroom table. if we don't want mapping table.
+convection of name = "school_id" is classname_<idfield>
+
+1. Uni Directional 1:1
+@OneToOne
+
+2. Bi Directional 1:1
+@OneToOne(mappedBy = "driver")
+@OneToOne
+
+3. UniDirectional 1:m
+@OneToMany
+@JoinColumn(name = "school_id") <className>_<idField>
+
+4. Bidirectional 1:m
+@OneToMany(mappedBy = "author")
+@ManyToOne
+
+// if we don't mention mapped by then jpa will create a fk in other table and also create mapping table
+out of confusion so mention mappedBy for sure.
+// for 1:m
+1. put fk on m side
+2. mapping table // if data is not sparse
+// so jpa will end up doing everything
+
+5. UniDirectional m:m
+@ManyToMany // mapping table will be created
+
+
+6. BiDirectional m:m
+@ManyToMany(mappedBy = 'Movies') // name as mentioned in other class
+@ManyToMany
+// without anything, two mapping tables will be created
+
+
+Locking of seats
+================
+seats has three states available, locked, booked
+
+- the moment the customer goes to payment page these seats are locked, so that no other person books them.
+- but there could be a point when three people come at same time.
+
+- transaction isolation level, - optimistic and pessimistic locks
+==================================================================
+Transaction isolation levels - locks on entire tnx
+----------------------------
+1) Read uncommitted - read uncommitted data, no locks
+2) Read committed -  read only committed data.
+3) Repeatable Read -  Read the same data from same tnx
+4) serialization - no parallel tnx
+in serialization no parallel writes happen. If there is no tnx that is updating the same row,
+we can do parallel reads. Plain read are possible but no update reads happen
+
+- we will make isolation level serialization. so the moment we click on pay button tnx become slow due to
+serialization. If one or two persons select the seat at same time the seats are locked for that person
+whose request is received by server first after clicking pay button and then mark them booked if payment
+is successful
+murphy's law - what ever goes wrong will go wrong
+- pessimistic locks - think about negative scenarios - locks are at query level or at dataLevel
+======================================================
+1) when we do ||le tnx things will always go wrong
+2) only allows one tnx at a time, only allows one read or write at a time
+pros
+1) very less error-prone
+cons
+1) very slow
+we can apply pessimistic locks on certain segments of table
+
+optimistic locks - somehow things will be right
+===============================================
+allows ||le tnx with a check
+checks is when tnx come to update a row, the tnx will also read the timestamp and version of that row
+save them and then update the row value, but before committing it will recheck if the timestamp and
+version are same or not as the one before updating the row.
+cons
+1) error-prone and bad user experience
+prons
+1) faster
+
+when reads are high do optimistic locking, by default all db's has optimistic locking
+when high writes do pessimistic locking so in bms we use pessimistic
+
+so we use serialization and pessimistic locking to make tnx concurrent while final seat locking
+
+serialization will not allow to update the row, and pessimistic lock on same row will not allow to
+read the row also.
+
+
+things left to do:
+1. refactor the tables, insert the data into table
+
+
+
